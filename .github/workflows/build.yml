@@ -6,26 +6,74 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v3
-        with: { distribution: 'temurin', java-version: '17' }
+        with:
+          distribution: 'temurin'
+          java-version: '17'
       - uses: android-actions/setup-android@v3
-      - name: Build
+      - name: Create Full Project
         run: |
-          echo "plugins { id 'com.android.application' }
-          android { namespace 'com.uberspot.a2048'; compileSdk 33; defaultConfig { applicationId 'com.uberspot.a2048'; minSdk 21; targetSdk 33; versionCode 1; versionName '1.0' } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.gms:play-services-ads:22.5.0' }" > app/build.gradle
+          mkdir -p app/src/main/java/com/uberspot/a2048
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
           echo "include ':app'" > settings.gradle
-          echo "buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:7.4.2' } } allprojects { repositories { google(); mavenCentral() } }" > build.gradle
-          mkdir -p app/src/main/java/com/uberspot/a2048 app/src/main/res/layout app/src/main/res/values
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          cat > build.gradle << 'END'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          END
+          cat > app/build.gradle << 'END'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.uberspot.a2048'
+              compileSdk 33
+              defaultConfig { applicationId "com.uberspot.a2048"; minSdk 21; targetSdk 33; versionCode 1; versionName "1.0" }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.gms:play-services-ads:22.5.0'
+          }
+          END
+          cat > app/src/main/AndroidManifest.xml << 'END'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <uses-permission android:name="android.permission.INTERNET"/>
-            <application android:label="2048 Ads">
-              <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-8859848812165923~7042533958"/>
-              <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
-            </application>
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+              <application android:label="2048 Ads">
+                  <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-8859848812165923~7042533958"/>
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+                  </activity>
+              </application>
           </manifest>
-          EOF
-          gradle assembleDebug
+          END
+          cat > app/src/main/res/values/strings.xml << 'END'
+          <resources><string name="app_name">2048 Ads</string></resources>
+          END
+          cat > app/src/main/res/layout/activity_main.xml << 'END'
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:ads="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent">
+              <WebView android:id="@+id/webview" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_above="@+id/adView"/>
+              <com.google.android.gms.ads.AdView android:id="@+id/adView" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_centerHorizontal="true" android:layout_alignParentBottom="true" ads:adSize="BANNER" ads:adUnitId="ca-app-pub-8859848812165923/9717722196"/>
+          </RelativeLayout>
+          END
+          cat > app/src/main/java/com/uberspot/a2048/MainActivity.java << 'END'
+          package com.uberspot.a2048;
+          import android.os.Bundle; import android.webkit.WebSettings; import android.webkit.WebView;
+          import androidx.appcompat.app.AppCompatActivity;
+          import com.google.android.gms.ads.AdRequest; import com.google.android.gms.ads.AdView; import com.google.android.gms.ads.MobileAds;
+          public class MainActivity extends AppCompatActivity {
+              public void onCreate(Bundle b){ super.onCreate(b); setContentView(R.layout.activity_main);
+              MobileAds.initialize(this, s->{});
+              AdView ad=findViewById(R.id.adView); ad.loadAd(new AdRequest.Builder().build());
+              WebView w=findViewById(R.id.webview); WebSettings s1=w.getSettings(); s1.setJavaScriptEnabled(true); w.loadUrl("https://play2048.co/");
+              }
+          }
+          END
+      - name: Build APK
+        run: gradle :app:assembleDebug
       - uses: actions/upload-artifact@v4
-        with: { name: Direct-APK-Download-Link, path: app/build/outputs/apk/debug/*.apk }
+        with:
+          name: Direct-APK-Download
+          path: app/build/outputs/apk/debug/*.apk
